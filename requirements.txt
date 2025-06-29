@@ -1,4 +1,14 @@
+# Enhanced Workflow Framework Requirements
+# Main requirements file for the enhanced framework with database integration
+
+# ============================================================================
+# CORE DEPENDENCIES (Required)
+# ============================================================================
+
+# Environment Configuration
 python-dotenv>=1.0.0
+
+# LLM and AI Framework (LangGraph + Groq)
 groq>=0.28.0
 langchain-groq>=0.2.0
 langchain-core>=0.3.40
@@ -6,9 +16,51 @@ langgraph>=0.4.9
 langgraph-prebuilt>=0.2.2
 langgraph-checkpoint>=2.1.0
 langgraph-supervisor>=0.0.27
-pydantic<2.10,>=2.9
 
+# Enhanced Data Validation and Models
+pydantic>=2.9,<2.10
+
+# Web Framework and API
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
 python-multipart>=0.0.6
+
+# Enhanced Date/Time Processing (for Phase 1 date handling)
+python-dateutil>=2.8.2
+
+# ============================================================================
+# DATABASE INTEGRATION (Choose based on your needs)
+# ============================================================================
+
+# SQLite (recommended for development and testing)
+aiosqlite>=0.20.0
+
+# For production databases, uncomment one of the following:
+
+# PostgreSQL (recommended for production)
+# psycopg2-binary>=2.9.9
+# asyncpg>=0.29.0
+
+# MySQL (alternative for production)
+# PyMySQL>=1.1.0
+# aiomysql>=0.2.0
+
+# ============================================================================
+# OPTIONAL ENHANCEMENTS (Recommended)
+# ============================================================================
+
+# Database ORM and Migrations (uncomment if using database)
+# SQLAlchemy>=2.0.23
+# alembic>=1.13.0
+
+# Enhanced Logging (recommended for production)
+# structlog>=23.2.0
+
+# ============================================================================
+# DEVELOPMENT DEPENDENCIES (Install with: pip install -r requirements-dev.txt)
+# ============================================================================
+# pytest>=7.4.3
+# pytest-asyncio>=0.21.1
+# pytest-cov>=4.1.0
+# black>=23.11.0
+# mypy>=1.7.1

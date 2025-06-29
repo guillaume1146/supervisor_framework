@@ -22,31 +22,25 @@ load_dotenv()
 
 def main():
     """Run the FastAPI application with modular structure"""
-    print("🚀 Enhanced Parameter Collection Workflow System (Modular)")
-    print("=" * 60)
-    print()
+    # print("🚀 Enhanced Parameter Collection Workflow System (Modular)")
+    # print("=" * 60)
+    # print()
     
-    # Verify modular structure
-    print("🔍 Verifying modular structure...")
-    print(f"✅ Total phases loaded: {len(PHASE_DEFINITIONS)}")
-    for phase in PHASE_DEFINITIONS:
-        print(f"   📋 {phase.name}: {phase.description}")
-    print()
+    # # Verify modular structure
+    # print("🔍 Verifying modular structure...")
+    # print(f"✅ Total phases loaded: {len(PHASE_DEFINITIONS)}")
+    # for phase in PHASE_DEFINITIONS:
+    #     print(f"   📋 {phase.name}: {phase.description}")
+    # print()
     
-    # Print test instructions
-    ChatbotTestCases.print_postman_instructions()
+    # # Print test instructions
+    # ChatbotTestCases.print_postman_instructions()
     
-    print("\n🎯 Starting FastAPI server with modular workflow system...")
-    logger.info("Starting Enhanced Workflow Chatbot API with modular structure...")
+    # print("\n🎯 Starting FastAPI server with modular workflow system...")
+    # logger.info("Starting Enhanced Workflow Chatbot API with modular structure...")
     
     try:
-        uvicorn.run(
-            "api.app:app",
-            host="0.0.0.0",
-            port=8000,
-            reload=True,
-            log_level="info"
-        )
+        uvicorn.run( "api.app:app", host="0.0.0.0", port=8000, reload=True, log_level="info" )
     except KeyboardInterrupt:
         print("\n👋 Server stopped gracefully")
 

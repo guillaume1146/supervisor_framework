@@ -250,69 +250,67 @@ class EnhancedParameterWorkflow:
             raise ValidationError(f"Parameter validation failed: {e}")
     
     def _get_missing_parameters(self, current_params: Dict[str, Any], param_model: Type[BaseModel]) -> List[str]:
-        """
-        Get list of missing required parameters.
+        """Get list of missing required parameters (phase-aware)"""
         
-        Args:
-            current_params: Current parameter values
-            param_model: Parameter model to check against
-            
-        Returns:
-            List of missing parameter names
-        """
-        # Get fields that don't have default values (required fields)
-        required_fields = [
-            name for name, field_info in param_model.model_fields.items()
-            if field_info.default is None and field_info.default_factory is None
-        ]
+        # Try to get user input fields from the parameter model
+        if hasattr(param_model, 'get_user_input_fields'):
+            user_input_fields = param_model.get_user_input_fields()
+        else:
+            # Fallback: all fields that don't have exclude=True
+            user_input_fields = []
+            for field_name, field_info in param_model.model_fields.items():
+                if not getattr(field_info, 'exclude', False):
+                    user_input_fields.append(field_name)
         
-        # If all fields are optional, check which ones we actually need filled
-        if not required_fields:
-            required_fields = list(param_model.model_fields.keys())
+        # Check which user input fields are missing
+        missing_fields = []
+        for field in user_input_fields:
+            value = current_params.get(field)
+            if (value is None or 
+                value == "" or 
+                str(value).lower() in ["none", "not specified", "null"] or
+                str(value).strip() == ""):
+                missing_fields.append(field)
         
-        return [
-            field for field in required_fields 
-            if (field not in current_params 
-                or current_params[field] is None 
-                or current_params[field] == ""
-                or current_params[field] == "None"
-                or str(current_params[field]).lower() == "none"
-                or str(current_params[field]).strip() == "")
-        ]
+        return missing_fields
     
     def _create_parameter_request_message(self, missing_params: List[str], param_model: Type[BaseModel], phase_name: str, is_retry: bool = False) -> str:
-        """
-        Create a user-friendly parameter request message.
+        """Create parameter request message (only for user input fields)"""
         
-        Args:
-            missing_params: List of missing parameter names
-            param_model: Pydantic model for validation
-            phase_name: Current phase name
-            is_retry: Whether this is a retry after validation failure
-            
-        Returns:
-            Formatted request message
-        """
-
         if is_retry:
             intro = "Let me help you provide the correct information:"
         else:
             intro = f"I need some additional information for your {phase_name.replace('_', ' ')}:"
 
-
+        # Get computed fields to exclude
+        computed_fields = set()
+        if hasattr(param_model, 'get_computed_fields'):
+            computed_fields = set(param_model.get_computed_fields())
+        
         param_requests = []
         for param in missing_params:
-            field_info = param_model.model_fields[param]
-            description = field_info.description or f"the {param.replace('_', ' ')}"
-            param_type = field_info.annotation.__name__
-            examples = getattr(field_info, 'examples', [])
-            example_text = f" (e.g., {', '.join(map(str, examples[:3]))})" if examples else ""
-            param_requests.append(f"• **{param.replace('_', ' ').title()}** ({param_type}): {description}{example_text}")
+            # Skip computed fields
+            if param in computed_fields:
+                continue
+                
+            # Skip fields marked with exclude=True
+            if param in param_model.model_fields:
+                field_info = param_model.model_fields[param]
+                if getattr(field_info, 'exclude', False):
+                    continue
+                    
+                description = field_info.description or f"the {param.replace('_', ' ')}"
+                examples = getattr(field_info, 'examples', [])
+                example_text = f" (e.g., {', '.join(map(str, examples[:3]))})" if examples else ""
+                param_requests.append(f"• **{param.replace('_', ' ').title()}**: {description}{example_text}")
         
-        return f""" {intro}
-        {chr(10).join(param_requests)}
-        Please provide these details and I'll continue with the workflow.
-        """.strip()
+        if not param_requests:
+            return "All required information has been collected. Processing your request..."
+        
+        return f"""{intro}
+    {chr(10).join(param_requests)}
+    Please provide these details and I'll continue with the workflow.
+    """.strip()
     
     def _build_graph(self) -> StateGraph:
         """Build the enhanced workflow graph with improved error handling"""
@@ -355,20 +353,19 @@ class EnhancedParameterWorkflow:
             supervisor_prompt = ChatPromptTemplate.from_messages([
     SystemMessage(content=f"""You are an intelligent workflow supervisor. Analyze the user's request and decide which workflow phase to execute.
 
-Available workflow phases:
-{phase_descriptions}
+    Available workflow phases:
+    {phase_descriptions}
 
-ROUTING GUIDELINES:
-- Use 'financial_input_validation' for: financial product analysis, pension/SIPP/ISA analysis, investment valuation, portfolio analysis
-- Use 'process_data' for: data analysis, trend analysis, performance metrics
-- Use 'generate_report' for: creating reports, generating documents
+    ROUTING GUIDELINES:
+    - Use 'financial_input_validation' for: financial product analysis, pension/SIPP/ISA analysis, investment valuation, portfolio analysis
+    - Use 'generate_report' for: creating reports, generating documents
 
-Return your decision with:
-- next_phase: one of {self.phase_names}
-- intent: brief summary of what the user wants to accomplish  
-- confidence: float between 0.0 and 1.0 indicating your confidence in the decision
+    Return your decision with:
+    - next_phase: one of {self.phase_names}
+    - intent: brief summary of what the user wants to accomplish  
+    - confidence: float between 0.0 and 1.0 indicating your confidence in the decision
 
-Choose the most appropriate phase based on keywords, context, and user intent."""),
+    Choose the most appropriate phase based on keywords, context, and user intent."""),
                 MessagesPlaceholder("messages"),
             ])
             
