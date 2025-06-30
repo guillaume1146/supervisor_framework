@@ -57,7 +57,7 @@ class FinancialInputValidationRecord:
     validation_errors: Optional[str] = None  # JSON array of validation errors
     
     def to_database_record(self, formatted_values: Dict[str, str]) -> DatabaseRecord:
-        """Convert to DatabaseRecord for insertion"""
+        """Convert to DatabaseRecord for insertion - FIXED VERSION"""
         
         fields = {}
         
@@ -85,7 +85,7 @@ class FinancialInputValidationRecord:
         fields['current_age'] = DatabaseField('current_age', self.current_age, 'INTEGER')
         fields['target_age'] = DatabaseField('target_age', self.target_age, 'INTEGER')
         
-        # Calculated fields
+        # FIXED: Calculated fields - ensure they're properly set
         fields['term_years'] = DatabaseField('term_years', self.term_years, 'DECIMAL(10,4)')
         fields['initial_investment_value'] = DatabaseField('initial_investment_value', self.initial_investment_value, 'DECIMAL(15,2)')
         fields['analysis_mode'] = DatabaseField('analysis_mode', self.analysis_mode, 'VARCHAR(20)')
@@ -95,7 +95,7 @@ class FinancialInputValidationRecord:
         fields['tax_band'] = DatabaseField('tax_band', self.tax_band, 'VARCHAR(30)')
         fields['client_tax_rate'] = DatabaseField('client_tax_rate', self.client_tax_rate, 'DECIMAL(5,4)')
         
-        # Analysis metadata
+        # Analysis metadata - ENSURE these are populated
         fields['performing_switch_analysis'] = DatabaseField('performing_switch_analysis', self.performing_switch_analysis, 'BOOLEAN')
         fields['data_quality_score'] = DatabaseField('data_quality_score', self.data_quality_score, 'INTEGER')
         fields['completion_percentage'] = DatabaseField('completion_percentage', self.completion_percentage, 'DECIMAL(5,2)')

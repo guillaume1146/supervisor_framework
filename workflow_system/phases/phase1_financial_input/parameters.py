@@ -203,9 +203,6 @@ class FinancialInputValidationParams(BaseModel):
             'validation_errors'
         ]
 
-    
-    
-    
     @classmethod
     def get_user_input_fields(cls) -> List[str]:
         """Get list of fields that require user input (exclude computed fields)"""
@@ -218,34 +215,40 @@ class FinancialInputValidationParams(BaseModel):
         ]
     
     @classmethod
-    def get_core_required_fields(cls) -> List[str]:
-        """Get list of core required fields (mandatory for all products)"""
-        return [
-            'valuation_date', 'provider_name', 'product_name', 'product_type',
-            'fund_value', 'surrender_value', 'investment_term_type'
-        ]
-    
-    @classmethod
     def get_conditional_required_fields(cls, product_type: str = None) -> List[str]:
         """Get additional required fields based on product type"""
         conditional = []
-        
         if not product_type:
             return conditional
             
-        # Pension products need age and tax info
         if product_type in ['pension', 'sipp']:
             conditional.extend(['current_age', 'include_taxation', 'tax_band'])
             
-        # Investment products need tax info
         if product_type in ['investment_bond', 'unit_trust', 'oeic', 'investment_trust']:
             conditional.extend(['include_taxation', 'tax_band'])
             
-        # Insurance products need age
         if product_type in ['life_insurance', 'endowment', 'whole_of_life', 'critical_illness_cover']:
             conditional.extend(['current_age'])
             
         return conditional
+    
+    @classmethod
+    def get_user_input_fields_for_product(cls, product_type: str = None) -> List[str]:
+        """Get user input fields filtered by product type"""
+        base_fields = [
+            'valuation_date', 'provider_name', 'product_name', 'product_type',
+            'fund_value', 'surrender_value', 'investment_term_type',
+            'end_date', 'user_input_years', 'user_input_months',
+            'current_age', 'target_age', 'performing_switch_analysis'
+        ]
+        
+        conditional_fields = cls.get_conditional_required_fields(product_type)
+        return base_fields + conditional_fields
+    
+    @classmethod
+    def get_core_required_fields(cls) -> List[str]:
+        """Get list of core required fields (mandatory for all products)"""
+        return [ 'valuation_date', 'provider_name', 'product_name', 'product_type', 'fund_value', 'surrender_value', 'investment_term_type' ]
     
     @classmethod
     def get_term_specific_fields(cls, term_type: str = None) -> List[str]:
@@ -295,7 +298,6 @@ class FinancialInputValidationParams(BaseModel):
         if v is None:
             return v
         return str(v)
-    
     
     @validator('product_type')
     def validate_product_type(cls, v):
@@ -403,7 +405,6 @@ class FinancialInputValidationParams(BaseModel):
         user_fields = self.get_user_input_fields()
         completed_fields = []
         missing_fields = []
-        
         for field in user_fields:
             value = getattr(self, field, None)
             if value and str(value).strip().lower() not in ['', 'none', 'not specified']:

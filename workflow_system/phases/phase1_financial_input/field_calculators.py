@@ -299,21 +299,29 @@ class Phase1FieldCalculator:
             self.calculation_errors.append(f"Error calculating completion_percentage: {str(e)}")
             return Decimal('0')
     
-    def calculate_validation_status(self, params: Dict[str, Any], missing_fields: List[str], 
-                                  validation_errors: List[str]) -> str:
-        """
-        Calculate overall validation status
-        
-        Logic:
-        - "validated" if no missing fields and no errors
-        - "pending" if missing required fields
-        - "failed" if validation errors exist
-        """
+    def calculate_validation_status(self, params: Dict[str, Any], missing_fields: List[str],  validation_errors: List[str]) -> str:
+        """Calculate overall validation status with better logic"""
         try:
-            if validation_errors:
+            # Critical errors = things that prevent completion
+            critical_errors = [
+                error for error in validation_errors
+                if any(keyword in error.lower() for keyword in [
+                    "must be", "required", "cannot", "invalid", "missing"
+                ])
+            ]
+            
+            # Warnings = issues that don't prevent completion
+            warnings = [
+                error for error in validation_errors
+                if "tax-exempt" in error.lower() or "not needed" in error.lower()
+            ]
+            
+            if critical_errors:
                 return "failed"
             elif missing_fields:
                 return "pending"
+            elif warnings:
+                return "completed_with_warnings"
             else:
                 return "validated"
                 

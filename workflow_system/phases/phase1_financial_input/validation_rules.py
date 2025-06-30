@@ -237,24 +237,27 @@ class Phase1ValidationRules:
         return is_valid
     
     def validate_tax_fields(self, params: Dict[str, Any]) -> bool:
-        """Validate tax-related fields"""
+        """Validate tax-related fields with ISA awareness"""
         is_valid = True
         
         product_type = params.get('product_type')
         include_taxation = params.get('include_taxation')
         tax_band = params.get('tax_band')
         
-        # Check if tax analysis makes sense for product type
-        if product_type in TAX_EXEMPT_PRODUCTS and include_taxation:
-            self.validation_warnings.append(f"{product_type.upper()} products are tax-exempt - tax analysis not needed")
+        if product_type in ['isa', 'stocks_shares_isa']:
+            if include_taxation:
+                self.validation_warnings.append("ISAs are tax-exempt - tax analysis not needed (ignoring tax settings)")
+            return True
         
-        # Check if tax analysis should be included for taxable products
-        if product_type in PENSION_PRODUCTS and include_taxation is False:
+        if product_type in ['investment_bond', 'unit_trust', 'oeic', 'investment_trust'] and include_taxation is False:
+            self.validation_warnings.append("Investment products usually benefit from tax analysis")
+        
+        if product_type in ['pension', 'sipp'] and include_taxation is False:
             self.validation_warnings.append("Pension products usually benefit from tax analysis")
         
-        # Validate tax band if tax analysis included
-        if include_taxation and not tax_band:
-            self.validation_errors.append(VALIDATION_MESSAGES.get('tax_band_required'))
+        # Validate tax band if tax analysis included (and not ISA)
+        if include_taxation and not tax_band and product_type not in ['isa', 'stocks_shares_isa']:
+            self.validation_errors.append("Tax band must be specified when including tax analysis")
             is_valid = False
         
         return is_valid

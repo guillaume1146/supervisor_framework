@@ -173,15 +173,24 @@ class Phase1WorkflowProcessor:
             logger.error(f"Error during business rule validation: {e}")
             return [f"Business rule validation error: {str(e)}"]
     
-    def create_database_record(self, database_values: Dict[str, Any], 
-                             display_values: Dict[str, str], 
-                             session_id: Optional[str] = None) -> FinancialInputValidationRecord:
-        """Create database record from processed values"""
+    def create_database_record(self, database_values: Dict[str, Any],  display_values: Dict[str, str],  session_id: Optional[str] = None) -> FinancialInputValidationRecord:
+        """Create database record from processed values - FIXED VERSION"""
         try:
             # Create record from database values
             record = FinancialInputValidationRecord.from_params(database_values, session_id)
             
-            # Set additional metadata fields
+            # ENSURE computed fields are populated from database_values
+            record.term_years = database_values.get('term_years')
+            record.initial_investment_value = database_values.get('initial_investment_value')
+            record.analysis_mode = database_values.get('analysis_mode')
+            record.client_tax_rate = database_values.get('client_tax_rate')
+            record.data_quality_score = database_values.get('data_quality_score')
+            record.completion_percentage = database_values.get('completion_percentage')
+            record.validation_status = database_values.get('validation_status')
+            record.missing_fields = database_values.get('missing_fields_json')  # Note: _json version
+            record.validation_errors = database_values.get('validation_errors')
+            
+            # Set timestamps
             record.created_at = datetime.datetime.utcnow()
             record.updated_at = datetime.datetime.utcnow()
             
@@ -305,8 +314,7 @@ Please correct these issues and try again.
         """.strip()
 
 
-def financial_input_validation_workflow(params: Dict[str, Any], 
-                                      session_id: Optional[str] = None) -> Dict[str, Any]:
+def financial_input_validation_workflow(params: Dict[str, Any], session_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Enhanced Phase 1: Core Input Validation and Initial Values
     Validates, processes, and converts core financial product inputs with database integration
@@ -343,16 +351,51 @@ def financial_input_validation_workflow(params: Dict[str, Any],
         
         # Step 5: Determine completion status
         missing_fields = database_values.get('missing_fields', [])
-        is_complete = len(missing_fields) == 0 and len(processor.validation_errors) == 0
+        validation_errors = processor.validation_errors
+        
+        # NEW: Separate warnings from errors
+        validation_warnings = processor.processing_warnings
+        
+        # Status determination logic:
+        # COMPLETED = No missing fields AND no critical errors
+        # INCOMPLETE = Missing fields OR critical errors
+        # WARNINGS = Completed but with warnings (like ISA tax info)
+        
+        has_critical_errors = any(
+            error for error in validation_errors 
+            if "must be" in error.lower() or "required" in error.lower() or "cannot" in error.lower()
+        )
+        
+        is_complete = (
+            len(missing_fields) == 0 and 
+            not has_critical_errors
+        )
+        
+        # Generate appropriate status
+        if is_complete:
+            if validation_warnings:
+                status = "completed_with_warnings"
+                status_message = "✅ **Phase 1: Core Input Validation - COMPLETED WITH NOTES**"
+            else:
+                status = "completed"
+                status_message = "✅ **Phase 1: Core Input Validation - COMPLETED**"
+        else:
+            if missing_fields:
+                status = "incomplete"
+                status_message = "⚠️ **Phase 1: Core Input Validation - INCOMPLETE**"
+            else:
+                status = "failed"
+                status_message = "❌ **Phase 1: Core Input Validation - VALIDATION FAILED**"
         
         # Step 6: Create database record (even if incomplete for progress tracking)
-        try:
-            database_record = processor.create_database_record(
-                database_values, display_values, session_id
-            )
-        except Exception as e:
-            logger.error(f"Failed to create database record: {e}")
-            database_record = None
+        database_record = None
+        if status != "failed":
+            try:
+                database_record = processor.create_database_record(
+                    database_values, display_values, session_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to create database record: {e}")
         
         # Step 7: Generate completion message
         completion_message = processor.generate_completion_message(database_values, display_values)
@@ -361,16 +404,17 @@ def financial_input_validation_workflow(params: Dict[str, Any],
         status = "completed" if is_complete else "incomplete"
         
         result = {
-            "status": status,
+            "status": status,  # Use the determined status
             "phase": "Phase 1: Core Input Validation and Initial Values",
             "completion_message": completion_message,
-            "processed_data": display_values,  # User-friendly formatted data
-            "database_values": database_values,  # Raw database values
+            "processed_data": display_values,
+            "database_values": database_values,
             "database_record": database_record.get_insert_data() if database_record else None,
             "validation_results": {
                 "is_complete": is_complete,
                 "missing_fields": missing_fields,
-                "validation_errors": processor.validation_errors,
+                "validation_errors": validation_errors,
+                "validation_warnings": validation_warnings,  # NEW: separate warnings
                 "data_quality_score": database_values.get('data_quality_score', 0),
                 "completion_percentage": float(database_values.get('completion_percentage', 0))
             },
@@ -383,7 +427,9 @@ def financial_input_validation_workflow(params: Dict[str, Any],
                 "display_fields": len(display_values),
                 "ready_for_next_phase": is_complete,
                 "analysis_mode": database_values.get('analysis_mode'),
-                "product_type": database_values.get('product_type')
+                "product_type": database_values.get('product_type'),
+                "has_warnings": len(validation_warnings) > 0,
+                "has_errors": len(validation_errors) > 0
             }
         }
         

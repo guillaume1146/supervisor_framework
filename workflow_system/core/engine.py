@@ -554,30 +554,57 @@ class EnhancedParameterWorkflow:
                 try:
                     validated_params = self._validate_parameters(clean_params, param_model)
                     state["status"] = WorkflowStatus.EXECUTING.value
+
                     result = phase_def.workflow_function(validated_params)
-                    if "results" not in state:
-                        state["results"] = {}
-                    state["results"][phase_name] = result
+                    # Handle different status types
+                    phase_status = result.get('status', 'completed')
                     
-                    success_message = f"""
-                    ✅ {phase_name.replace('_', ' ').title()} completed successfully!
-                    Results Summary:
-                    - Status: {result.get('status', 'Completed')}
-                    - Generated at: {result.get('generated_at', result.get('processed_at', 'N/A'))}
-                    The workflow has been completed and results are available.
-                    """.strip()
-                    
-                    logger.info(f"Workflow {phase_name} completed successfully")
-                    return {
-                        "messages": [AIMessage(content=success_message)],
-                        "awaiting_input": False,
-                        "current_phase": None,
-                        "results": state["results"],
-                        "status": WorkflowStatus.COMPLETED.value
-                    }
+                    if phase_status in ['completed', 'completed_with_warnings']:
+                        # SUCCESS - workflow completed
+                        success_message = result.get('completion_message',  f"✅ {phase_name.replace('_', ' ').title()} completed successfully!")
+                        logger.info(f"Workflow {phase_name} completed with status: {phase_status}")
+                        return {
+                            "messages": [AIMessage(content=success_message)],
+                            "awaiting_input": False,
+                            "current_phase": None,
+                            "results": {phase_name: result},
+                            "status": WorkflowStatus.COMPLETED.value
+                        }
+                        
+                    elif phase_status == 'incomplete':
+                        # INCOMPLETE - missing required information
+                        incomplete_message = result.get('completion_message', f"⚠️ {phase_name.replace('_', ' ').title()} needs additional information")
+                        logger.info(f"Workflow {phase_name} incomplete - requesting more information")
+                        return {
+                            "messages": [AIMessage(content=incomplete_message)],
+                            "awaiting_input": True,
+                            "current_phase": phase_name,
+                            "params": state["params"],
+                            "status": WorkflowStatus.COLLECTING_PARAMS.value
+                        }
+                        
+                    elif phase_status == 'failed':
+                        # FAILED - validation or execution errors
+                        error_message = result.get('completion_message', f"❌ {phase_name.replace('_', ' ').title()} failed validation")
+                        logger.error(f"Workflow {phase_name} failed")
+                        return {
+                            "messages": [AIMessage(content=error_message)],
+                            "awaiting_input": False,
+                            "status": WorkflowStatus.FAILED.value,
+                            "error_count": state.get("error_count", 0) + 1
+                        }
+                    else:
+                        # UNKNOWN STATUS - treat as completed
+                        logger.warning(f"Unknown status '{phase_status}' for {phase_name}, treating as completed")
+                        return {
+                            "messages": [AIMessage(content=result.get('completion_message', 'Workflow completed'))],
+                            "awaiting_input": False,
+                            "current_phase": None,
+                            "results": {phase_name: result},
+                            "status": WorkflowStatus.COMPLETED.value
+                        }
                 except ValidationError as e:
                     logger.error(f"Parameter validation failed for {phase_name}: {e}")
-                    
                     # Create helpful error message with specific guidance
                     validation_error_message = self._create_validation_error_message(
                         str(e), phase_name, param_model
@@ -586,7 +613,6 @@ class EnhancedParameterWorkflow:
                     # Mark the parameter that failed validation for re-collection
                     state["params"][phase_name]["__validation_failed__"] = True
                     state["params"][phase_name]["__last_validation_error__"] = str(e)
-                    
                     return {
                         "messages": [AIMessage(content=validation_error_message)],
                         "awaiting_input": True,  # ✅ KEEP CONVERSATION GOING

@@ -43,12 +43,12 @@ class ChatbotService:
         return str(uuid.uuid4())
     
     def _get_chat_status(self, workflow_status: str, awaiting_input: bool) -> ChatStatus:
-        """Convert workflow status to chat status"""
-        if workflow_status == WorkflowStatus.COMPLETED.value:
+        """Convert workflow status to chat status with new status types"""
+        if workflow_status in [WorkflowStatus.COMPLETED.value, "completed_with_warnings"]:
             return ChatStatus.COMPLETED
         elif workflow_status == WorkflowStatus.FAILED.value:
             return ChatStatus.FAILED
-        elif awaiting_input or workflow_status == WorkflowStatus.COLLECTING_PARAMS.value:
+        elif awaiting_input or workflow_status in [WorkflowStatus.COLLECTING_PARAMS.value, "incomplete"]:
             return ChatStatus.WAITING_INPUT
         else:
             return ChatStatus.ACTIVE
